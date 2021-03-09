@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Combate - Timongo RPG</title>
+
+    <link rel="stylesheet" href="app.css">
+</head>
+<body>
+    <div id="player">
+        <table>
+            <thead>
+                <tr>
+                    <th class="name" colspan="2">Player</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Level</td>
+                    <td class="level"></td>
+                </tr>
+                <tr>
+                    <td>Experience</td>
+                    <td class="experience"><span class="current"></span>/<span class="tnl"></span></td>
+                </tr>
+                <tr>
+                    <td>Hitpoints</td>
+                    <td class="hitpoints"></td>
+                </tr>
+                <tr>
+                    <td>Attack</td>
+                    <td class="attack"></td>
+                </tr>
+                <tr>
+                    <td>Defense</td>
+                    <td class="defense"></td>
+                </tr>
+                <tr>
+                    <td>Skills</td>
+                    <td>
+                        <select id="playerSkill">
+                            <option value="none">None</option>
+                            <option value="mortal_strike">Mortal Strike</option>
+                            <option value="execute">Execute</option>
+                        </select>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="enemy">
+        <table>
+            <thead>
+                <tr>
+                    <th class="name" colspan="2">Enemy</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Hitpoints</td>
+                    <td class="hitpoints"></td>
+                </tr>
+                <tr>
+                    <td>Attack</td>
+                    <td class="attack"></td>
+                </tr>
+                <tr>
+                    <td>Defense</td>
+                    <td class="defense"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="actions">
+        <button id="autoFightButton">Luta automática</button>
+        <button id="reviveButton" disabled>Reviver</button>
+    </div>
+    <div id="log"></div>
+
+    <script>
+        var player = {
+            name: 'Dishark',
+            level: 1,
+            experience: 0,
+            hitpoints: 20,
+            maxHitpoints: 20,
+            attack: 2,
+            defense: 1,
+
+            currentSkill: '',
+
+            setSkill: function (skill) {
+                this.currentSkill = skill;
+            },
+
+            strike: function (target) {
+                // retornar dano
+                var damage = 0;
+                // retornar a skill que usou
+                switch (this.currentSkill) {
+                    case 'mortal_strike':
+                        damage = roll(6) * 2 * this.attack;
+                        log(player.name + ' utilizou Mortal Strike');
+                        log(player.name + ' causou ' + damage + ' de dano em ' + target.name);
+                        return damage;
+                    default:
+                        damage = roll(6) * this.attack;
+                        log(player.name + ' causou ' + damage + ' de dano em ' + target.name);
+                        return damage;
+                }
+            }
+        }
+
+        var enemy = {
+            name: 'Troll',
+            experience: 20,
+            hitpoints: 20,
+            maxHitpoints: 20,
+            attack: 2,
+            defense: 1
+        }
+
+        window.onload = () => {
+            console.log('window.onload');
+
+            updatePlayer();
+            updateEnemy();
+
+            document.querySelector('#autoFightButton').onclick = autoFight;
+            document.querySelector('#reviveButton').onclick = revive;
+            document.querySelector('#playerSkill').onchange = setSkill;
+        }
+
+        autoFight = () => {
+            clearLogs();
+            while(true) {
+                //jogador bate (rolar dano e deduzir hitpoint)
+                var damage = player.strike(enemy);
+
+                // update hitpoints
+                enemy.hitpoints -= damage;
+                updateAll();
+
+                //checa se inimigo está vivo
+                if(enemy.hitpoints <= 0) break;
+
+                //inimigo bate
+                damage = enemy.attack * roll(6);
+
+                // update hitpoints
+                player.hitpoints -= damage;
+                log(enemy.name + ' causou ' + damage + ' de dano em ' + player.name);
+                updateAll();
+
+                //checa se player está vivo
+                if(player.hitpoints <= 0) break;
+            }
+
+            breakLine();
+
+            if(player.hitpoints > 0) {
+                log(player.name + ' venceu!');
+                log(player.name + ' ganhou ' + enemy.experience + ' pontos de experiência.');
+                increasePlayerExperience(enemy.experience);
+                venceu();
+                return;
+            }
+
+            log(player.name + ' morreu!');
+
+            var lostExp = Math.floor(player.experience * 0.1);
+
+            decreasePlayerExperience(lostExp);
+
+            log(player.name + ' perdeu ' + (lostExp) + ' pontos de experiência.');
+            morreu();
+        }
+
+        updateAll = () => {
+            updatePlayer();
+            updateEnemy();
+        }
+
+        updatePlayer = () => {
+            document.querySelector('#player .name').innerHTML = player.name;
+            document.querySelector('#player .level').innerHTML = player.level;
+            document.querySelector('#player .experience .current').innerHTML = player.experience;
+            document.querySelector('#player .experience .tnl').innerHTML = player.level * 100;
+            document.querySelector('#player .hitpoints').innerHTML = player.hitpoints;
+            document.querySelector('#player .attack').innerHTML = player.attack;
+            document.querySelector('#player .defense').innerHTML = player.defense;
+        }
+
+        updateEnemy = () => {
+            document.querySelector('#enemy .name').innerHTML = enemy.name;
+            document.querySelector('#enemy .hitpoints').innerHTML = enemy.hitpoints;
+            document.querySelector('#enemy .attack').innerHTML = enemy.attack;
+            document.querySelector('#enemy .defense').innerHTML = enemy.defense;
+        }
+
+        log = (string) => {
+            document.querySelector('#log').innerHTML += string + '<br />';
+        }
+
+        breakLine = (string) => {
+            document.querySelector('#log').innerHTML += '<br />';
+        }
+
+        roll = (faces) => {
+            return Math.floor(Math.random() * Math.floor(faces));
+        }
+
+        morreu = () => {
+            document.querySelector('#reviveButton').removeAttribute('disabled');
+            document.querySelector('#autoFightButton').disabled = true;
+            updateAll();
+        }
+
+        venceu = () => {
+            enemy = generateNewEnemy();
+            updateAll();
+        }
+
+        generateNewEnemy = () => {
+            return {
+                name: 'Troll',
+                experience: 20,
+                hitpoints: 20,
+                maxHitpoints: 20,
+                attack: 2,
+                defense: 1
+            };
+        }
+
+        revive = () => {
+            player.hitpoints = player.maxHitpoints;
+            updatePlayer();
+            document.querySelector('#reviveButton').disabled = true;
+            document.querySelector('#autoFightButton').removeAttribute('disabled');
+        }
+
+        clearLogs = () => {
+            document.querySelector('#log').innerHTML = '';
+        }
+
+        increasePlayerExperience = (experience) => {
+            player.experience += experience;
+
+            if (player.experience >= player.level * 100) {
+                player.experience = 0;
+                player.level += 1;
+            }
+        }
+
+        decreasePlayerExperience = (experience) => {
+            player.experience -= experience;
+            if (player.experience < 0) {
+                player.experience = 0;
+            }
+        }
+
+        setSkill = (event) => {
+            player.setSkill(event.target.value);
+        }
+    </script>
+</body>
+</html>
