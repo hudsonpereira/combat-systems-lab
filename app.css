@@ -1,3 +1,21 @@
 #log {
     margin: 20px 0px;
 }
+
+#skills {
+    height: 80px;
+    /* width: 200px; */
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* background-color: red; */
+
+}
+
+#skills div {
+    flex: 1;
+    height: 50px;
+    width: 100px;
+    text-align: center;
+}

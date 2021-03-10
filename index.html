@@ -27,7 +27,7 @@
                 </tr>
                 <tr>
                     <td>Hitpoints</td>
-                    <td class="hitpoints"></td>
+                    <td class="hitpoints"><span class="current"></span>/<span class="max"></span></td>
                 </tr>
                 <tr>
                     <td>Attack</td>
@@ -38,17 +38,18 @@
                     <td class="defense"></td>
                 </tr>
                 <tr>
-                    <td>Skills</td>
-                    <td>
-                        <select id="playerSkill">
-                            <option value="none">None</option>
-                            <option value="mortal_strike">Mortal Strike</option>
-                            <option value="execute">Execute</option>
-                        </select>
-                    </td>
+                    <td>Buffs</td>
+                    <td class="buffs"></td>
                 </tr>
             </tbody>
         </table>
+
+        <div id="skills">
+            <div class="q">Q - <span class="mortal_strike">Mortal Strike</span></div>
+            <div class="w">W - <span class="bandage">Bandage</span></div>
+            <div class="e">E - <span class="overpower">Overpower</span></div>
+            <div class="r">R - <span class="execute">Execute</span></div>
+        </div>
     </div>
     <div id="enemy">
         <table>
@@ -74,7 +75,7 @@
         </table>
     </div>
     <div id="actions">
-        <button id="autoFightButton">Luta automática</button>
+        <button id="huntButton">Caçar</button>
         <button id="reviveButton" disabled>Reviver</button>
     </div>
     <div id="log"></div>
@@ -83,44 +84,85 @@
         var player = {
             name: 'Dishark',
             level: 1,
+            globalCooldown: 3,
+            currentGlobalCooldown: 2,
             experience: 0,
             hitpoints: 20,
             maxHitpoints: 20,
             attack: 2,
             defense: 1,
 
-            currentSkill: '',
+            buffs: [],
+
+            applyBuff: function (buff) {
+                const searchBuff = this.buffs.find(b => b.type == buff);
+
+                if (searchBuff) {
+                    searchBuff.stack++;
+                    return;
+                }
+
+                this.buffs.push({
+                    type: buff,
+                    stack: 1
+                });
+            },
 
             setSkill: function (skill) {
                 this.currentSkill = skill;
             },
 
-            strike: function (target) {
-                // retornar dano
+            use: function (skill, target) {
                 var damage = 0;
-                // retornar a skill que usou
-                switch (this.currentSkill) {
+                this.currentGlobalCooldown = this.globalCooldown;
+                switch (skill) {
                     case 'mortal_strike':
-                        damage = roll(6) * 2 * this.attack;
-                        log(player.name + ' utilizou Mortal Strike');
-                        log(player.name + ' causou ' + damage + ' de dano em ' + target.name);
-                        return damage;
-                    default:
-                        damage = roll(6) * this.attack;
-                        log(player.name + ' causou ' + damage + ' de dano em ' + target.name);
-                        return damage;
+                        var extraDamage = 0;
+                        var overpowerBuff;
+
+                        if(overpowerBuff = this.buffs.find(e => e.type == 'overpower')) {
+                            var index = this.buffs.indexOf(overpowerBuff);
+
+                            if (index > -1) {
+                                this.buffs.splice(index, 1);
+                            }
+
+                            extraDamage = 0.1 * overpowerBuff.stack;
+                        }
+
+
+                        damage = Math.floor((roll(6) + this.attack * 2) * extraDamage);
+                        log(this.name + ' usou Mortal Strike e causou ' + damage + ' de dano em ' + target.name);
+                        target.hitpoints -= damage;
+                        break;
+                    case 'bandage':
+                        var heal = roll(6);
+                        this.hitpoints += heal;
+                        log(this.name + ' usou Bandage e curou ' + heal + ' pontos!');
+
+                        break;
+                    case 'overpower':
+                        this.applyBuff('overpower');
+                        console.log(this.buffs);
+                        damage = roll(6) + this.attack;
+                        log(this.name + ' usou Overpower e causou ' + damage + ' de dano em ' + target.name);
+                        target.hitpoints -= damage;
+                        break;
+                    case 'execute':
+                        var missingHitpoints = 100 - 100 * target.hitpoints / target.maxHitpoints;
+
+                        damage = Math.floor((roll(6) + this.attack) * (1 + missingHitpoints / 100));
+                        log(this.name + ' usou Execute e causou ' + damage + ' de dano em ' + target.name);
+                        target.hitpoints -= damage;
+                        break;
                 }
-            }
+            },
+
         }
 
-        var enemy = {
-            name: 'Troll',
-            experience: 20,
-            hitpoints: 20,
-            maxHitpoints: 20,
-            attack: 2,
-            defense: 1
-        }
+        var enemy;
+        var cooldown;
+        var enemyAttack;
 
         window.onload = () => {
             console.log('window.onload');
@@ -128,54 +170,69 @@
             updatePlayer();
             updateEnemy();
 
-            document.querySelector('#autoFightButton').onclick = autoFight;
+            // document.querySelector('#autoFightButton').onclick = autoFight;
             document.querySelector('#reviveButton').onclick = revive;
-            document.querySelector('#playerSkill').onchange = setSkill;
+            document.querySelector('#huntButton').onclick = hunt;
+
+            setupKeybinds();
         }
 
-        autoFight = () => {
-            clearLogs();
-            while(true) {
-                //jogador bate (rolar dano e deduzir hitpoint)
-                var damage = player.strike(enemy);
+        startCombat = () => {
+            cooldown = setInterval(() => {
+                player.currentGlobalCooldown -= 1;
+            }, 1000);
 
-                // update hitpoints
-                enemy.hitpoints -= damage;
-                updateAll();
-
-                //checa se inimigo está vivo
-                if(enemy.hitpoints <= 0) break;
-
-                //inimigo bate
-                damage = enemy.attack * roll(6);
-
-                // update hitpoints
+            enemyAttack = setInterval(() => {
+                var damage = enemy.attack * roll(6);
                 player.hitpoints -= damage;
-                log(enemy.name + ' causou ' + damage + ' de dano em ' + player.name);
-                updateAll();
 
-                //checa se player está vivo
-                if(player.hitpoints <= 0) break;
+                log(enemy.name + ' atacou ' + player.name + ' e causou ' +  damage + ' de dano.');
+                updateAll();
+                checkCombatStatus();
+            }, 3000);
+        }
+
+        leaveCombat = () => {
+            clearInterval(cooldown);
+            clearInterval(enemyAttack);
+        }
+
+        hunt = () => {
+            clearLogs();
+            enemy = generateNewEnemy();
+            updateEnemy();
+            document.querySelector('#huntButton').disabled = true;
+
+            startCombat();
+        }
+
+        checkCombatStatus = () => {
+            if (enemy.hitpoints <= 0 || player.hitpoints <= 0) {
+                leaveCombat();
             }
 
-            breakLine();
-
-            if(player.hitpoints > 0) {
+            if (enemyDied()) {
+                breakLine();
                 log(player.name + ' venceu!');
-                log(player.name + ' ganhou ' + enemy.experience + ' pontos de experiência.');
+                log('Ganhou ' + enemy.experience + ' pontos de experiência');
                 increasePlayerExperience(enemy.experience);
+
+                updateAll();
+
                 venceu();
+
                 return;
             }
 
-            log(player.name + ' morreu!');
+            if (playerDied()) {
+                breakLine();
+                log(player.name + ' morreu.');
+                enableReviveButton();
+            }
+        }
 
-            var lostExp = Math.floor(player.experience * 0.1);
-
-            decreasePlayerExperience(lostExp);
-
-            log(player.name + ' perdeu ' + (lostExp) + ' pontos de experiência.');
-            morreu();
+        playerDied = () => {
+            return player.hitpoints <= 0;
         }
 
         updateAll = () => {
@@ -188,12 +245,23 @@
             document.querySelector('#player .level').innerHTML = player.level;
             document.querySelector('#player .experience .current').innerHTML = player.experience;
             document.querySelector('#player .experience .tnl').innerHTML = player.level * 100;
-            document.querySelector('#player .hitpoints').innerHTML = player.hitpoints;
+            document.querySelector('#player .hitpoints .current').innerHTML = player.hitpoints;
+            document.querySelector('#player .hitpoints .max').innerHTML = player.maxHitpoints;
             document.querySelector('#player .attack').innerHTML = player.attack;
             document.querySelector('#player .defense').innerHTML = player.defense;
+
+            var buffsDisplay = '';
+
+            player.buffs.forEach(buff => {
+                buffsDisplay += buff.type + '(' + buff.stack + ')' + '<br/>';
+            });
+
+            document.querySelector('#player .buffs').innerHTML = buffsDisplay;
         }
 
         updateEnemy = () => {
+            if(! thereIsAnEnemy()) return;
+
             document.querySelector('#enemy .name').innerHTML = enemy.name;
             document.querySelector('#enemy .hitpoints').innerHTML = enemy.hitpoints;
             document.querySelector('#enemy .attack').innerHTML = enemy.attack;
@@ -214,13 +282,12 @@
 
         morreu = () => {
             document.querySelector('#reviveButton').removeAttribute('disabled');
-            document.querySelector('#autoFightButton').disabled = true;
             updateAll();
         }
 
         venceu = () => {
-            enemy = generateNewEnemy();
-            updateAll();
+            document.querySelector('#huntButton').removeAttribute('disabled');
+            enemy = null;
         }
 
         generateNewEnemy = () => {
@@ -236,9 +303,10 @@
 
         revive = () => {
             player.hitpoints = player.maxHitpoints;
-            updatePlayer();
+            enemy = null;
+            updateAll();
             document.querySelector('#reviveButton').disabled = true;
-            document.querySelector('#autoFightButton').removeAttribute('disabled');
+            document.querySelector('#huntButton').removeAttribute('disabled');
         }
 
         clearLogs = () => {
@@ -261,8 +329,67 @@
             }
         }
 
-        setSkill = (event) => {
-            player.setSkill(event.target.value);
+        thereIsAnEnemy = () => {
+            return enemy;
+        }
+
+        playerHasCooldown = () => {
+            return player.currentGlobalCooldown <= 0;
+        }
+
+        enableReviveButton = () => {
+            document.querySelector('#reviveButton').removeAttribute('disabled');
+        }
+
+        setupKeybinds = () => {
+            const availableKeybinds = [
+                'q',
+                'w',
+                'e',
+                'r'
+            ];
+
+            checkKeybindExists = key => {
+                return availableKeybinds.includes(key);
+            }
+
+            document.onkeydown = event => {
+                if (!checkKeybindExists(event.key)) return;
+
+                const skill = document.querySelector('#skills .' + event.key);
+
+                skill.style.backgroundColor = 'red';
+            }
+
+            document.onkeypress = event => {
+                if (! checkKeybindExists(event.key)) return;
+                if (enemyDied() || playerDied()) return;
+
+                if (! playerHasCooldown()) {
+                    return;
+                };
+
+                const skill = document.querySelector('#skills .' + event.key + ' span');
+
+                player.use(skill.className, enemy);
+                checkCombatStatus();
+
+                updateAll();
+            }
+
+            enemyDied = () => {
+                if (!enemy) return true;
+
+                return enemy.hitpoints <= 0;
+            }
+
+            document.onkeyup = event => {
+                if (!checkKeybindExists(event.key)) return;
+
+                const skill = document.querySelector('#skills .' + event.key);
+
+                skill.style.backgroundColor = 'white';
+            }
         }
     </script>
 </body>
